@@ -1,0 +1,15 @@
+appId: com.billiard_manager.nextron
+productName: Billiard Manager
+copyright: Copyright © 2024 TeaTea1611
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - from: .
+    filter:
+      - package.json
+      - app
+publish: null
+extraResources:
+  - node_modules/.prisma/**/*
+  - node_modules/@prisma/client/runtime/**/*
