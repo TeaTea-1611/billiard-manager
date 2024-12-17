@@ -7,7 +7,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Table } from "@prisma/client";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -28,49 +27,36 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { Textarea } from "../ui/textarea";
 import { toast } from "sonner";
-import { useTableStore } from "@/hooks/use-table-store";
+import { useMenuStore } from "@/hooks/use-menu-store";
 
 const formSchema = z.object({
-  name: z.string().min(2, {
-    message: "",
-  }),
-  hourlyRate: z.coerce.number(),
-  description: z.string(),
+  name: z.string(),
+  price: z.coerce.number(),
+  category: z.coerce.number(),
 });
 
-export function UpdateTableDialog({
-  children,
-  initialData,
-}: {
-  children: React.ReactNode;
-  initialData: Table;
-}) {
+export function AddMenuItemDialog({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [open, setOpen] = useState(false);
-  const { updateData } = useTableStore();
-
+  const { addData } = useMenuStore();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: initialData.name,
-      hourlyRate: initialData.hourlyRate,
-      description: initialData.description,
+      name: "",
+      price: 10000,
+      category: 0,
     },
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-    const result = await window.ipc.invoke("update-table", {
-      id: initialData.id,
-      ...values,
-    });
+    const result = await window.ipc.invoke("create-menu-item", values);
     setIsLoading(false);
 
     toast[result.success ? "success" : "error"](result.message);
     if (result.success && result.data) {
-      updateData(result.data);
+      addData(result.data);
       form.reset();
       setOpen(false);
     }
@@ -81,7 +67,7 @@ export function UpdateTableDialog({
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Cập nhật bàn</DialogTitle>
+          <DialogTitle>Thêm sản phẩm mới</DialogTitle>
           <DialogDescription></DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -91,9 +77,9 @@ export function UpdateTableDialog({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Tên bàn</FormLabel>
+                  <FormLabel>Tên sản phẩm</FormLabel>
                   <FormControl>
-                    <Input placeholder="Bàn" {...field} />
+                    <Input {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -101,10 +87,35 @@ export function UpdateTableDialog({
             />
             <FormField
               control={form.control}
-              name="hourlyRate"
+              name="category"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Giá / giờ</FormLabel>
+                  <FormLabel>Loại</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value.toString()}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a verified email to display" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="0">Đồ ăn</SelectItem>
+                      <SelectItem value="1">Thức uống</SelectItem>
+                      <SelectItem value="2">Khác</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Giá</FormLabel>
                   <FormControl>
                     <Input type="number" {...field} />
                   </FormControl>
@@ -112,21 +123,8 @@ export function UpdateTableDialog({
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Mô tả</FormLabel>
-                  <FormControl>
-                    <Textarea {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Đang tải..." : "Xác nhận"}
+              Xác nhận
             </Button>
           </form>
         </Form>

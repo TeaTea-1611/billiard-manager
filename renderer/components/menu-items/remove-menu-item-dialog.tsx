@@ -10,29 +10,29 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../ui/alert-dialog";
-import { useTableStore } from "@/hooks/use-table-store";
+import { useMenuStore } from "@/hooks/use-menu-store";
 import { toast } from "sonner";
 
-export function RemoveTableDialog({
+export function RemoveMenuItemDialog({
   children,
-  tableId,
+  menuItemId,
 }: {
   children: React.ReactNode;
-  tableId: number;
+  menuItemId: number;
 }) {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
-  const { removeData } = useTableStore();
+  const { removeData } = useMenuStore();
 
-  const handleRemoveTable = async () => {
+  const handleRemoveMenuItem = async () => {
     setLoading(true);
-    const result = await window.ipc.invoke("delete-table", {
-      id: tableId,
+    const result = await window.ipc.invoke("delete-menu-item", {
+      id: menuItemId,
     });
     setLoading(false);
     toast[result.success ? "success" : "error"](result.message);
     if (result.success) {
-      removeData(tableId);
+      removeData(menuItemId);
       setOpen(false);
     }
   };
@@ -49,7 +49,7 @@ export function RemoveTableDialog({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Hủy</AlertDialogCancel>
-          <AlertDialogAction onClick={handleRemoveTable}>
+          <AlertDialogAction onClick={handleRemoveMenuItem} disabled={loading}>
             Xác nhận
           </AlertDialogAction>
         </AlertDialogFooter>

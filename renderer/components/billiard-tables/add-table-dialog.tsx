@@ -6,9 +6,11 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { useTableStore } from "@/hooks/use-table-store";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "../ui/button";
 import {
@@ -20,13 +22,6 @@ import {
   DialogTrigger,
 } from "../ui/dialog";
 import { Input } from "../ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
 import { Textarea } from "../ui/textarea";
 
 const formSchema = z.object({
@@ -40,6 +35,7 @@ const formSchema = z.object({
 export function CreateTableDialog({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const { addData } = useTableStore();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -52,10 +48,15 @@ export function CreateTableDialog({ children }: { children: React.ReactNode }) {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-    window.ipc.send("create-table", values);
+    const result = await window.ipc.invoke("create-table", values);
     setIsLoading(false);
-    form.reset();
-    setOpen(false);
+
+    toast[result.success ? "success" : "error"](result.message);
+    if (result.success && result.data) {
+      addData(result.data);
+      form.reset();
+      setOpen(false);
+    }
   }
 
   return (
@@ -75,7 +76,7 @@ export function CreateTableDialog({ children }: { children: React.ReactNode }) {
                 <FormItem>
                   <FormLabel>Tên bàn</FormLabel>
                   <FormControl>
-                    <Input placeholder="Bàn" {...field} />
+                    <Input {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -86,22 +87,10 @@ export function CreateTableDialog({ children }: { children: React.ReactNode }) {
               name="hourlyRate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Mật khẩu</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value.toString()}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a verified email to display" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="10000">10000</SelectItem>
-                      <SelectItem value="20000">20000</SelectItem>
-                      <SelectItem value="30000">30000</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <FormLabel>Giá / giờ</FormLabel>
+                  <FormControl>
+                    <Input type="number" {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

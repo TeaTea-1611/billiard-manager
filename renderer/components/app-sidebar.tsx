@@ -58,12 +58,12 @@ const MENU_ITEMS: SidebarMenuItem[] = [
     ],
   },
   {
-    href: "/foods",
+    href: "/menu-items",
     label: "Đồ Ăn & Thức Uống",
     icon: <UtensilsIcon />,
     subItems: [
-      { href: "/foods", label: "Danh mục" },
-      { href: "/foods/order", label: "Đặt đồ" },
+      { href: "/menu-items", label: "Danh mục" },
+      { href: "/menu-items/order", label: "Đặt đồ" },
     ],
   },
 ];
@@ -118,7 +118,12 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     ));
 
   return (
-    <Sidebar variant="inset" {...props}>
+    <Sidebar
+      variant="sidebar"
+      collapsible="none"
+      {...props}
+      className="min-h-[calc(100svh-36px)] max-h-[calc(100svh-36px)]"
+    >
       <SidebarContent>
         <SidebarGroup>{renderMenuItems()}</SidebarGroup>
       </SidebarContent>

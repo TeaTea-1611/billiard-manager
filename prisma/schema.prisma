@@ -22,51 +22,40 @@ model Table {
   id          Int      @id @default(autoincrement())
   name        String   @unique
   hourlyRate  Float
-  description String?
+  description String
   createdAt   DateTime @default(now())
-
-  playSessions PlaySession[]
-}
-
-model PlaySession {
-  id          Int       @id @default(autoincrement())
-  tableId     Int
-  table       Table     @relation(fields: [tableId], references: [id])
-  startTime   DateTime  @default(now())
-  endTime     DateTime?
-  status      Int       @default(1)
-  totalAmount Float     @default(0)
-  isPaid      Boolean   @default(false)
-  createdAt   DateTime  @default(now())
   orders      Order[]
 }
 
 model MenuItem {
-  id        Int         @id @default(autoincrement())
-  name      String      @unique
-  price     Float
-  category  Int
-  createdAt DateTime    @default(now())
-  OrderItem OrderItem[]
+  id         Int         @id @default(autoincrement())
+  name       String      @unique
+  price      Float
+  category   Int
+  createdAt  DateTime    @default(now())
+  orderItems OrderItem[]
 }
 
 model Order {
-  id            Int          @id @default(autoincrement())
-  playSessionId Int?
-  playSession   PlaySession? @relation(fields: [playSessionId], references: [id])
-  orderItems    OrderItem[]
-  totalAmount   Float
-  isPaid        Boolean      @default(false)
-  createdAt     DateTime     @default(now())
+  id          Int         @id @default(autoincrement())
+  tableId     Int?
+  table       Table?      @relation(fields: [tableId], references: [id])
+  startTime   DateTime?
+  endTime     DateTime?
+  orderItems  OrderItem[]
+  amountTable Float
+  totalAmount Float
+  isPaid      Boolean     @default(false)
+  createdAt   DateTime    @default(now())
 }
 
 model OrderItem {
-  id         Int      @id @default(autoincrement())
   orderId    Int
   order      Order    @relation(fields: [orderId], references: [id])
   menuItemId Int
   menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
   quantity   Int
   subtotal   Float
-  createdAt  DateTime @default(now())
+
+  @@id([orderId, menuItemId])
 }

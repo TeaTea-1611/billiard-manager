@@ -10,6 +10,8 @@ import Head from "next/head";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "./ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 import { toast } from "sonner";
+import { ModeToggle } from "./mode-toggle";
+import { Sidebar } from "./sidebar";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -20,14 +22,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (loading) {
-      window.ipc.send("me", null);
-
-      const handleUserResponse = (fetchedUser: User | null) => {
-        setUser(fetchedUser);
+      (async () => {
+        const result = await window.ipc.invoke("me", null);
+        if (result) {
+          setUser(result);
+        }
         setLoading(false);
-      };
-
-      window.ipc.on("me", handleUserResponse);
+      })();
     }
   }, [loading, setUser]);
 
@@ -68,31 +69,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <Head>
         <title>Billiard</title>
       </Head>
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          <header className="flex items-center h-16 gap-2 shrink-0">
-            <div className="flex items-center gap-2 px-4">
-              <SidebarTrigger className="-ml-1" />
-              {/* <Separator orientation="vertical" className="h-4 mr-2" />
-              <Breadcrumb>
-                <BreadcrumbList>
-                  <BreadcrumbItem className="hidden md:block">
-                    <BreadcrumbLink href="#">
-                      Building Your Application
-                    </BreadcrumbLink>
-                  </BreadcrumbItem>
-                  <BreadcrumbSeparator className="hidden md:block" />
-                  <BreadcrumbItem>
-                    <BreadcrumbPage>Data Fetching</BreadcrumbPage>
-                  </BreadcrumbItem>
-                </BreadcrumbList>
-              </Breadcrumb> */}
-            </div>
-          </header>
-          <div className="p-4">{children}</div>
-        </SidebarInset>
-      </SidebarProvider>
+      <div className="border-t">
+        <div className="relative bg-background">
+          <Sidebar className="fixed bottom-0 left-0 w-64 border-r top-9" />
+          <div className="pl-64">
+            <div className="h-full px-4 py-6">{children}</div>
+          </div>
+        </div>
+      </div>
     </>
   );
 }

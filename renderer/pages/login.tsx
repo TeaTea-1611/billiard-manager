@@ -11,18 +11,29 @@ import {
 import { Input } from "@/components/ui/input";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { User } from "@prisma/client";
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
 const formSchema = z.object({
-  username: z.string().min(2, {
-    message: "Username must be at least 2 characters.",
-  }),
-  password: z.string().min(2),
+  username: z
+    .string({
+      required_error: "Tên đăng nhập là bắt buộc",
+      invalid_type_error: "Tên đăng nhập phải là chuỗi ký tự",
+    })
+    .min(2, {
+      message: "Tên đăng nhập phải có ít nhất 2 ký tự",
+    }),
+  password: z
+    .string({
+      required_error: "Mật khẩu là bắt buộc",
+      invalid_type_error: "Mật khẩu phải là chuỗi ký tự",
+    })
+    .min(2, {
+      message: "Mật khẩu phải có ít nhất 2 ký tự",
+    }),
 });
 
 export default function LoginPage() {
@@ -39,25 +50,17 @@ export default function LoginPage() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-    window.ipc.send("login", values);
+    const data = await window.ipc.invoke("login", values);
     setIsLoading(false);
+    toast[data.success ? "success" : "error"](data.message);
+    if (data.success && data.user) {
+      setUser(data.user);
+      router.push("/home");
+    }
   }
 
-  useEffect(() => {
-    window.ipc.on(
-      "login",
-      (data: { success: boolean; message: string; user?: User }) => {
-        toast[data.success ? "success" : "error"](data.message);
-        if (data.success && data.user) {
-          setUser(data.user);
-          router.push("/home");
-        }
-      },
-    );
-  }, []);
-
   return (
-    <div className="flex items-center justify-center size-full min-h-svh">
+    <div className="flex items-center justify-center size-full">
       <Card className="w-full max-w-96">
         <CardHeader>
           <CardTitle>Đăng nhập</CardTitle>

@@ -1,274 +1,138 @@
-import path from "path";
-import { app, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeTheme, Tray } from "electron";
 import serve from "electron-serve";
+import path from "path";
+import { DEFAULT_WINDOW_CONFIG } from "./constants";
 import { createWindow } from "./helpers";
-import prisma from "./prisma";
-import argon2 from "argon2";
-import Store from "electron-store";
-import { User } from "@prisma/client";
+import authHandler from "./ipc-handlers/auth-handler";
+import tableHandler from "./ipc-handlers/table-handler";
+import { store } from "./store";
+import menuItemHandler from "./ipc-handlers/menu-item-handler";
+import oderHandler from "./ipc-handlers/order-handler";
+
+let tray: Tray | null = null;
+
+const createTray = () => {
+  tray = new Tray(path.join(__dirname, "../resources/icon.ico"));
+  const contextMenu = Menu.buildFromTemplate([
+    { label: "Mở ứng dụng", click: () => mainWindow?.show() },
+    { label: "Thoát", click: () => app.quit() },
+  ]);
+
+  tray.setToolTip("Billiard Manager");
+  tray.setContextMenu(contextMenu);
+
+  tray.on("click", () => {
+    mainWindow?.show();
+  });
+};
+
+const getSystemTheme = (): "light" | "dark" => {
+  return nativeTheme.shouldUseDarkColors ? "dark" : "light";
+};
+
+const getCurrentTheme = (): "light" | "dark" | "system" => {
+  const theme = store.get("theme") || "system";
+  return theme === "system" ? getSystemTheme() : theme;
+};
 
 const isProd = process.env.NODE_ENV === "production";
 
-async function initializeData() {
-  try {
-    const userCount = await prisma.user.count();
-
-    if (userCount === 0) {
-      const hashPassword = await argon2.hash("password");
-
-      await prisma.user.create({
-        data: {
-          username: "admin",
-          password: hashPassword,
-          role: 0,
-          fullname: "admin",
-        },
-      });
-
-      console.log("Đã khởi tạo dữ liệu ban đầu thành công");
-    }
-  } catch (error) {
-    console.error("Lỗi khi khởi tạo dữ liệu:", error);
-  }
-}
-
-if (isProd) {
-  serve({ directory: "app" });
-} else {
-  app.setPath("userData", `${app.getPath("userData")} (development)`);
-}
+let mainWindow: BrowserWindow | null = null;
 
 (async () => {
-  await app.whenReady();
-  await initializeData();
+  if (isProd) {
+    serve({ directory: "app" });
+  } else {
+    app.setPath("userData", `${app.getPath("userData")} (development)`);
+  }
 
-  const mainWindow = createWindow("main", {
-    width: 1280,
-    height: 772,
+  const gotTheLock = app.requestSingleInstanceLock();
+
+  if (!gotTheLock) {
+    app.quit();
+    return;
+  }
+
+  app.on("second-instance", (event, commandLine, workingDirectory) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+
+  await app.whenReady();
+
+  mainWindow = createWindow("main", {
+    width: DEFAULT_WINDOW_CONFIG.width,
+    height: DEFAULT_WINDOW_CONFIG.height,
+    autoHideMenuBar: DEFAULT_WINDOW_CONFIG.autoHideMenuBar,
+    titleBarStyle: "hidden",
+    titleBarOverlay: {
+      color: getCurrentTheme() === "dark" ? "#12182b" : "#ffffff",
+      symbolColor: getCurrentTheme() === "dark" ? "#f8fafc" : "#000000",
+      height: 24,
+    },
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
     },
-    autoHideMenuBar: true,
+  });
+
+  mainWindow.webContents.once("did-finish-load", () => {
+    const currentTheme = store.get("theme") || "system";
+    const themeToSend =
+      currentTheme === "system" ? getSystemTheme() : currentTheme;
+    mainWindow.webContents.send("theme-updated", themeToSend);
   });
 
   if (isProd) {
-    await mainWindow.loadURL("app://./home");
+    await mainWindow.loadURL("app://./login");
   } else {
     const port = process.argv[2];
-    await mainWindow.loadURL(`http://localhost:${port}/home`);
+    await mainWindow.loadURL(`http://localhost:${port}/login`);
     mainWindow.webContents.openDevTools();
   }
-})();
 
-app.on("window-all-closed", () => {
-  app.quit();
-});
+  await authHandler.initializeDefaultUser();
 
-app.on("before-quit", () => {
-  // store.delete("me");
-});
+  authHandler.registerListeners();
+  tableHandler.registerListeners();
+  menuItemHandler.registerListeners();
+  oderHandler.registerListeners();
 
-type StoreType = {
-  me?: User | null;
-};
+  mainWindow.on("close", (event) => {
+    event.preventDefault();
+    mainWindow?.hide();
+  });
 
-const store = new Store<StoreType>({
-  encryptionKey: "my_secure_encryption_key",
-});
+  createTray();
 
-ipcMain.on("login", async (event, args) => {
-  const { username, password } = args;
+  app.on("window-all-closed", () => {});
 
-  try {
-    const user = await prisma.user.findUnique({
-      where: { username },
-    });
+  app.on("before-quit", () => {
+    // store.delete("me");
+    tray?.destroy();
+  });
 
-    if (!user || !(await argon2.verify(user.password, password))) {
-      event.reply("login", {
-        success: false,
-        message: "Tài khoản hay mật khẩu không đúng.",
+  nativeTheme.on("updated", () => {
+    const currentTheme = store.get("theme") || "system";
+
+    if (currentTheme === "system" && mainWindow) {
+      const systemTheme = getSystemTheme();
+      mainWindow.webContents.send("theme-updated", systemTheme);
+    }
+  });
+
+  ipcMain.on("set-theme", (_event, theme: "light" | "dark" | "system") => {
+    store.set("theme", theme);
+    const themeToApply = theme === "system" ? getSystemTheme() : theme;
+
+    if (mainWindow) {
+      mainWindow.setTitleBarOverlay({
+        color: themeToApply === "dark" ? "#12182b" : "#ffffff",
+        symbolColor: themeToApply === "dark" ? "#f8fafc" : "#000000",
       });
-      return;
     }
 
-    const sanitizedUser = {
-      ...user,
-      password: "",
-    };
-
-    store.set("me", sanitizedUser);
-
-    event.reply("login", {
-      success: true,
-      message: "Đăng nhập thành công",
-      user: sanitizedUser,
-    });
-  } catch (error) {
-    event.reply("toast", {
-      success: false,
-      message: "Đã xảy ra lỗi. Vui lòng thử lại sau.",
-    });
-  }
-});
-
-ipcMain.on("me", (event) => {
-  event.reply("me", store.get("me") || null);
-});
-
-ipcMain.on("logout", async (event) => {
-  store.delete("me");
-  event.reply("toast", { success: true, message: "Đã đăng xuất." });
-});
-
-ipcMain.on("create-table", async (event, args) => {
-  const user = store.get("me") || null;
-
-  if (!user || user.role !== 0) {
-    event.reply("toast", {
-      success: false,
-      message: "Bạn không có quyền này.",
-    });
-    return;
-  }
-
-  const { name, hourlyRate, description } = args;
-
-  if (await prisma.table.findUnique({ where: { name } })) {
-    event.reply("toast", {
-      success: false,
-      message: "Tên bàn đã tồn tại.",
-    });
-    return;
-  }
-
-  await prisma.table.create({
-    data: {
-      name,
-      hourlyRate,
-      description,
-    },
+    mainWindow?.webContents.send("theme-updated", themeToApply);
   });
-  const tables = await prisma.table.findMany();
-
-  event.reply("tables", tables);
-  event.reply("toast", {
-    success: true,
-    message: "Đã thêm bàn mới.",
-  });
-});
-
-ipcMain.on("get-tables", async (event) => {
-  const tables = await prisma.table.findMany();
-
-  event.reply("tables", tables);
-});
-
-ipcMain.on("update-table", async (event, args) => {
-  const user = store.get("me") || null;
-
-  if (!user || user.role !== 0) {
-    event.reply("toast", {
-      success: false,
-      message: "Bạn không có quyền này.",
-    });
-    return;
-  }
-
-  const { id, name, hourlyRate, description } = args;
-
-  await prisma.table.update({
-    where: { id },
-    data: {
-      name,
-      hourlyRate,
-      description,
-    },
-  });
-
-  const tables = await prisma.table.findMany();
-
-  event.reply("tables", tables);
-  event.reply("toast", {
-    success: true,
-    message: "Đã cập nhật.",
-  });
-});
-
-ipcMain.on("delete-table", async (event, args) => {
-  const user = store.get("me") || null;
-
-  if (!user || user.role !== 0) {
-    event.reply("toast", {
-      success: false,
-      message: "Bạn không có quyền này.",
-    });
-    return;
-  }
-
-  const { id } = args;
-
-  await prisma.table.delete({
-    where: { id },
-  });
-
-  const tables = await prisma.table.findMany();
-
-  event.reply("tables", tables);
-  event.reply("toast", {
-    success: true,
-    message: "Đã xóa.",
-  });
-});
-
-ipcMain.on("get-tables-with-status", async (event) => {
-  const tablesWithStatus = await prisma.table.findMany({
-    include: { playSessions: { where: { endTime: null } } },
-  });
-
-  const tablesStatus = tablesWithStatus.map((table) => {
-    const isAvailable =
-      table.playSessions.length === 0 ||
-      table.playSessions.every((session) => session.endTime !== null);
-    return {
-      ...table,
-      isAvailable,
-    };
-  });
-
-  event.reply("tables-with-status", tablesStatus);
-});
-
-ipcMain.on("create-play-session", async (event, args) => {
-  const user = store.get("me") || null;
-
-  if (!user) {
-    event.reply("toast", {
-      success: false,
-      message: "Bạn không có quyền này.",
-    });
-    return;
-  }
-
-  const { tableId } = args;
-
-  await prisma.playSession.create({
-    data: { tableId },
-  });
-
-  const tablesWithStatus = await prisma.table.findMany({
-    include: { playSessions: { where: { endTime: null } } },
-  });
-
-  const tablesStatus = tablesWithStatus.map((table) => {
-    const isAvailable =
-      table.playSessions.length === 0 ||
-      table.playSessions.every((session) => session.endTime !== null);
-    return {
-      ...table,
-      isAvailable,
-    };
-  });
-
-  event.reply("tables-with-status", tablesStatus);
-});
+})().then(() => {});
