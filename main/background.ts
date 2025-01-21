@@ -1,138 +1,145 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeTheme, Tray } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, Tray } from "electron";
 import serve from "electron-serve";
 import path from "path";
-import { DEFAULT_WINDOW_CONFIG } from "./constants";
+import { DEFAULT_WINDOW_CONFIG } from "./config";
 import { createWindow } from "./helpers";
-import authHandler from "./ipc-handlers/auth-handler";
-import tableHandler from "./ipc-handlers/table-handler";
-import { store } from "./store";
-import menuItemHandler from "./ipc-handlers/menu-item-handler";
-import oderHandler from "./ipc-handlers/order-handler";
+import tableHandler from "./modules/table/table.handler";
+import itemHandler from "./modules/item/item.handler";
+import bookingHandler from "./modules/booking/booking.handler";
+import orderHandler from "./modules/order/order.handler";
 
 let tray: Tray | null = null;
-
-const createTray = () => {
-  tray = new Tray(path.join(__dirname, "../resources/icon.ico"));
-  const contextMenu = Menu.buildFromTemplate([
-    { label: "Mở ứng dụng", click: () => mainWindow?.show() },
-    { label: "Thoát", click: () => app.quit() },
-  ]);
-
-  tray.setToolTip("Billiard Manager");
-  tray.setContextMenu(contextMenu);
-
-  tray.on("click", () => {
-    mainWindow?.show();
-  });
-};
-
-const getSystemTheme = (): "light" | "dark" => {
-  return nativeTheme.shouldUseDarkColors ? "dark" : "light";
-};
-
-const getCurrentTheme = (): "light" | "dark" | "system" => {
-  const theme = store.get("theme") || "system";
-  return theme === "system" ? getSystemTheme() : theme;
-};
-
-const isProd = process.env.NODE_ENV === "production";
-
 let mainWindow: BrowserWindow | null = null;
 
-(async () => {
-  if (isProd) {
-    serve({ directory: "app" });
-  } else {
-    app.setPath("userData", `${app.getPath("userData")} (development)`);
-  }
+const gotTheLock = app.requestSingleInstanceLock();
 
-  const gotTheLock = app.requestSingleInstanceLock();
-
-  if (!gotTheLock) {
-    app.quit();
-    return;
-  }
-
-  app.on("second-instance", (event, commandLine, workingDirectory) => {
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on("second-instance", (_event, _commandLine, _workingDirectory) => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
       mainWindow.focus();
     }
   });
 
-  await app.whenReady();
+  const getIconPath = () => {
+    const platform = process.platform;
+    const iconName = platform === "win32" ? "icon.ico" : "icon.png";
 
-  mainWindow = createWindow("main", {
-    width: DEFAULT_WINDOW_CONFIG.width,
-    height: DEFAULT_WINDOW_CONFIG.height,
-    autoHideMenuBar: DEFAULT_WINDOW_CONFIG.autoHideMenuBar,
-    titleBarStyle: "hidden",
-    titleBarOverlay: {
-      color: getCurrentTheme() === "dark" ? "#12182b" : "#ffffff",
-      symbolColor: getCurrentTheme() === "dark" ? "#f8fafc" : "#000000",
-      height: 24,
-    },
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-    },
-  });
-
-  mainWindow.webContents.once("did-finish-load", () => {
-    const currentTheme = store.get("theme") || "system";
-    const themeToSend =
-      currentTheme === "system" ? getSystemTheme() : currentTheme;
-    mainWindow.webContents.send("theme-updated", themeToSend);
-  });
-
-  if (isProd) {
-    await mainWindow.loadURL("app://./login");
-  } else {
-    const port = process.argv[2];
-    await mainWindow.loadURL(`http://localhost:${port}/login`);
-    mainWindow.webContents.openDevTools();
-  }
-
-  await authHandler.initializeDefaultUser();
-
-  authHandler.registerListeners();
-  tableHandler.registerListeners();
-  menuItemHandler.registerListeners();
-  oderHandler.registerListeners();
-
-  mainWindow.on("close", (event) => {
-    event.preventDefault();
-    mainWindow?.hide();
-  });
-
-  createTray();
-
-  app.on("window-all-closed", () => {});
-
-  app.on("before-quit", () => {
-    // store.delete("me");
-    tray?.destroy();
-  });
-
-  nativeTheme.on("updated", () => {
-    const currentTheme = store.get("theme") || "system";
-
-    if (currentTheme === "system" && mainWindow) {
-      const systemTheme = getSystemTheme();
-      mainWindow.webContents.send("theme-updated", systemTheme);
+    if (isProd) {
+      return path.join(process.resourcesPath, iconName);
+    } else {
+      return path.join(__dirname, "../resources", iconName);
     }
-  });
+  };
 
-  ipcMain.on("set-theme", (_event, theme: "light" | "dark" | "system") => {
-    store.set("theme", theme);
-    const themeToApply = theme === "system" ? getSystemTheme() : theme;
+  const createTray = () => {
+    // Kiểm tra xem hệ thống có hỗ trợ tray không
+    if (process.platform === "linux" && !app.isUnityRunning()) {
+      console.log("Tray không được hỗ trợ trên môi trường này");
+      return;
+    }
 
-    if (mainWindow) {
-      mainWindow.setTitleBarOverlay({
-        color: themeToApply === "dark" ? "#12182b" : "#ffffff",
-        symbolColor: themeToApply === "dark" ? "#f8fafc" : "#000000",
+    try {
+      const iconPath = getIconPath();
+      tray = new Tray(iconPath);
+
+      const contextMenu = Menu.buildFromTemplate([
+        { label: "Mở ứng dụng", click: () => mainWindow?.show() },
+        {
+          label: "Thoát",
+          click: () => {
+            if (tray) {
+              tray.destroy();
+              tray = null;
+            }
+            app.quit();
+          },
+        },
+      ]);
+
+      tray.setToolTip("Billiard Manager");
+      tray.setContextMenu(contextMenu);
+
+      // Trên Linux, click vào tray không hoạt động giống Windows
+      if (process.platform === "linux") {
+        tray.on("right-click", () => {
+          if (tray) {
+            tray.popUpContextMenu();
+          }
+        });
+      }
+
+      tray.on("click", () => {
+        mainWindow?.show();
       });
+    } catch (error) {
+      console.error("Lỗi khi tạo tray:", error);
+    }
+  };
+
+  const isProd = process.env.NODE_ENV === "production";
+
+  (async () => {
+    if (isProd) {
+      serve({ directory: "app" });
+    } else {
+      app.setPath("userData", `${app.getPath("userData")} (development)`);
     }
 
-    mainWindow?.webContents.send("theme-updated", themeToApply);
+    await app.whenReady();
+
+    mainWindow = createWindow("main", {
+      ...DEFAULT_WINDOW_CONFIG,
+      webPreferences: {
+        preload: path.join(__dirname, "preload.js"),
+      },
+    });
+
+    if (isProd) {
+      await mainWindow.loadURL("app://./home");
+    } else {
+      const port = process.argv[2];
+      await mainWindow.loadURL(`http://localhost:${port}/home`);
+      mainWindow.webContents.openDevTools();
+    }
+
+    tableHandler.registerListeners();
+    itemHandler.registerListeners();
+    bookingHandler.registerListeners();
+    orderHandler.registerListeners();
+
+    mainWindow.on("close", (event) => {
+      event.preventDefault();
+      mainWindow?.hide();
+    });
+
+    createTray();
+
+    app.on("window-all-closed", () => {});
+
+    app.on("before-quit", () => {
+      if (tray) {
+        tray.destroy();
+        tray = null;
+      }
+    });
+  })().then(() => {});
+
+  ipcMain.on("window-minimize", () => {
+    BrowserWindow.getFocusedWindow()?.minimize();
   });
-})().then(() => {});
+
+  ipcMain.on("window-maximize", () => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win) {
+      win.isMaximized() ? win.unmaximize() : win.maximize();
+    }
+  });
+
+  ipcMain.on("window-close", () => {
+    BrowserWindow.getFocusedWindow()?.close();
+  });
+}

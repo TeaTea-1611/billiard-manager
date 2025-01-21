@@ -1,16 +1,59 @@
-appId: com.billiard_manager.nextron
+appId: com.billiard-manager.nextron
 productName: Billiard Manager
 copyright: Copyright © 2024 TeaTea1611
+
 directories:
   output: dist
   buildResources: resources
+
 files:
   - from: .
     filter:
       - package.json
       - app
+
 publish: null
+
 extraResources:
   - prisma/**/*
   - node_modules/.prisma/**/*
   - node_modules/@prisma/client/runtime/**/*
+
+# Cấu hình chung cho tất cả nền tảng
+compression: maximum
+asar: true
+
+# Cấu hình cho Windows
+win:
+  icon: resources/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - ia32
+
+# Cấu hình NSIS installer
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ${productName}
+
+# Cấu hình cho Linux
+linux:
+  icon: resources/icon.png
+  target:
+    - target: AppImage
+    - target: deb
+    - target: rpm
+  category: Utility
+  maintainer: TeaTea1611
+
+# Cấu hình cho macOS
+mac:
+  icon: resources/icon.icns
+  category: public.app-category.utilities
+  target:
+    - target: dmg
+    - target: zip

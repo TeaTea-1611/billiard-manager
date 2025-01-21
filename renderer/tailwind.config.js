@@ -6,6 +6,7 @@ const config = {
   content: [
     "./renderer/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./renderer/components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./renderer/features/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {

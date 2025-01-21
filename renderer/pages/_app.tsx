@@ -1,10 +1,11 @@
 import type { AppProps } from "next/app";
-import { Fragment, ReactElement, ReactNode } from "react";
+import { ReactElement, ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
 import "../styles/globals.css";
 import { NextPage } from "next";
 import { ThemeProvider } from "@/components/theme-provider";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 export type NextPageWithLayout<P = {}, IP = P> = NextPage<P, IP> & {
   getLayout?: (page: ReactElement) => ReactNode;
@@ -14,27 +15,23 @@ type AppPropsWithLayout = AppProps & {
   Component: NextPageWithLayout;
 };
 
+const queryClient = new QueryClient();
+
 function MyApp({ Component, pageProps }: AppPropsWithLayout) {
   const getLayout = Component.getLayout ?? ((page) => page);
 
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-    >
-      <div
-        id="titlebar"
-        className="flex items-center px-2 border-b h-9 bg-card"
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
       >
-        <span className="text-sm font-semibold">Billiard Manager</span>
-      </div>
-      <div className="h-[calc(100vh-36px)] overflow-auto">
         {getLayout(<Component {...pageProps} />)}
-      </div>
-      <Toaster />
-    </ThemeProvider>
+        <Toaster />
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 

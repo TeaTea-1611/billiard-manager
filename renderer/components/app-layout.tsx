@@ -1,79 +1,99 @@
-import { LoaderIcon } from "lucide-react";
-import { useRouter } from "next/router";
-import React, { useEffect, useState } from "react";
-
-import { useCurrentUser } from "@/hooks/use-current-user";
-import { User } from "@prisma/client";
-import { Button } from "./ui/button";
-import Link from "next/link";
+import {
+  MinusIcon,
+  MoonIcon,
+  RotateCwIcon,
+  SquareIcon,
+  SunIcon,
+  XIcon,
+} from "lucide-react";
 import Head from "next/head";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "./ui/sidebar";
-import { AppSidebar } from "./app-sidebar";
-import { toast } from "sonner";
-import { ModeToggle } from "./mode-toggle";
+import React from "react";
 import { Sidebar } from "./sidebar";
+import { Button } from "./ui/button";
+import { useTheme } from "next-themes";
+import { inter } from "@/styles/fonts";
+import { Separator } from "./ui/separator";
+import { useRouter } from "next/router";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
+  const { setTheme, resolvedTheme } = useTheme();
   const router = useRouter();
+  const toggleTheme = React.useCallback(() => {
+    setTheme(resolvedTheme === "dark" ? "light" : "dark");
+  }, [resolvedTheme, setTheme]);
 
-  const user = useCurrentUser((state) => state.user);
-  const setUser = useCurrentUser((state) => state.setUser);
-  const [loading, setLoading] = useState(true);
+  const handleMinimize = () => {
+    window.ipc.send("window-minimize", null);
+  };
 
-  useEffect(() => {
-    if (loading) {
-      (async () => {
-        const result = await window.ipc.invoke("me", null);
-        if (result) {
-          setUser(result);
-        }
-        setLoading(false);
-      })();
-    }
-  }, [loading, setUser]);
+  const handleMaximize = () => {
+    window.ipc.send("window-maximize", null);
+  };
 
-  useEffect(() => {
-    window.ipc.on("toast", (data: { success: boolean; message: string }) => {
-      toast[data.success ? "success" : "error"](data.message);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!loading) {
-      if (!user && router.pathname !== "/login") {
-        router.push("/login");
-      }
-    }
-  }, [user, router, loading]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen size-full">
-        <LoaderIcon className="size-6 animate-spin" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen size-full">
-        <Button asChild>
-          <Link href={"/login"}>Đăng nhập</Link>
-        </Button>
-      </div>
-    );
-  }
+  const handleClose = () => {
+    window.ipc.send("window-close", null);
+  };
 
   return (
     <>
       <Head>
-        <title>Billiard</title>
+        <title>Billiard Manager</title>
       </Head>
-      <div className="border-t">
+      <div
+        className={`flex items-center px-2 border-b h-9 bg-card ${inter.className}`}
+      >
+        <div id="titlebar" className="flex items-center flex-1">
+          <span className="text-sm font-semibold">Billiard Manage</span>
+        </div>
+        <div className="flex items-center justify-center gap-2">
+          <Button
+            variant="outline"
+            className="px-0 size-6"
+            onClick={() => {
+              router.reload();
+            }}
+          >
+            <RotateCwIcon />
+          </Button>
+          <Button
+            variant="outline"
+            className="px-0 size-6 group/toggle"
+            onClick={toggleTheme}
+          >
+            <SunIcon className="hidden [html.dark_&]:block" />
+            <MoonIcon className="hidden [html.light_&]:block" />
+            <span className="sr-only">Toggle theme</span>
+          </Button>
+        </div>
+        <Separator orientation="vertical" className="mx-2" />
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={handleMinimize}
+            className="inline-flex items-center justify-center bg-yellow-400 rounded-full group size-4 text-primary-foreground hover:opacity-90"
+          >
+            <MinusIcon className="duration-200 opacity-0 size-3 group-hover:opacity-100" />
+          </button>
+          <button
+            onClick={handleMaximize}
+            className="inline-flex items-center justify-center bg-green-400 rounded-full group size-4 text-primary-foreground hover:opacity-90"
+          >
+            <SquareIcon className="duration-200 opacity-0 size-3 group-hover:opacity-100" />
+          </button>
+          <button
+            onClick={handleClose}
+            className="inline-flex items-center justify-center bg-red-400 rounded-full group size-4 text-primary-foreground hover:opacity-90"
+          >
+            <XIcon className="duration-200 opacity-0 size-3 group-hover:opacity-100" />
+          </button>
+        </div>
+      </div>
+      <div className={`h-[calc(100vh-36px)] overflow-auto ${inter.className}`}>
         <div className="relative bg-background">
           <Sidebar className="fixed bottom-0 left-0 w-64 border-r top-9" />
           <div className="pl-64">
-            <div className="h-full px-4 py-6">{children}</div>
+            <div className="flex flex-col h-full gap-3 px-3 py-2">
+              {children}
+            </div>
           </div>
         </div>
       </div>

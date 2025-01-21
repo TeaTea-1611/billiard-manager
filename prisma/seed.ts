@@ -1,21 +1,8 @@
 import { PrismaClient } from "@prisma/client";
-import argon2 from "argon2";
 
 const prisma = new PrismaClient();
 
-async function main() {
-  const hashPassword = await argon2.hash("password");
-
-  await prisma.user.upsert({
-    where: { username: "admin" },
-    update: {},
-    create: {
-      username: "admin",
-      password: hashPassword,
-      role: 0,
-    },
-  });
-}
+async function main() {}
 main()
   .then(async () => {
     await prisma.$disconnect();
